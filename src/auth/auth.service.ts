@@ -1,10 +1,11 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UserService } from '../user/users.service';
-import { User } from 'src/user/user.schema';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { LoginUserDto } from 'src/user/dto/login-user.dto';
 import { CreateUserDto } from 'src/user/dto/create-user.dto';
+import { toUserDto, UserDto } from 'src/user/dto/user.dto';
+import { checkPassword, hashPassword } from './auth-helper';
 
 @Injectable()
 export class AuthService {
@@ -13,18 +14,21 @@ export class AuthService {
     private readonly jwtService: JwtService,
   ) {}
 
-  async register(signUp: CreateUserDto): Promise<string> {
-    const userId = await this.userService.insertUser(signUp);
-    return userId;
+  async register(createUserDto: CreateUserDto): Promise<UserDto> {
+    createUserDto.password = await hashPassword(createUserDto.password);
+    const user = await this.userService.insertUser(createUserDto);
+    return user;
   }
 
   async login(loginUserDto: LoginUserDto): Promise<string> {
-    const user = await this.userService.findOne(loginUserDto.email);
+    console.log(loginUserDto)
     return this.userService
-      .checkPassword(loginUserDto.password, user.password)
-      .then((res) => {
+      .findOneLogin(loginUserDto.email)
+      .then(async (user) => {
+        console.log(user)
+        const res = await checkPassword(loginUserDto.password, user.password);
         if (res) {
-          return this.signToken(user);
+          return this.signToken(toUserDto(user));
         } else {
           throw new UnauthorizedException();
         }
@@ -34,20 +38,21 @@ export class AuthService {
       });
   }
 
-  async verifyPayload(payload: JwtPayload): Promise<User> {
-    let user: User;
+  async verifyPayload(payload: JwtPayload): Promise<UserDto> {
+    let user: UserDto;
     try {
-      user = await this.userService.findOne(payload.email);
+      user = await this.userService.findOne({
+        where: { email: payload.email },
+      });
     } catch (error) {
       throw new UnauthorizedException(
         `There isn't any user with email: ${payload.email}`,
       );
     }
-    delete user.password;
     return user;
   }
 
-  signToken(user: User): string {
+  signToken(user: UserDto): string {
     const payload = {
       sub: user.email,
     };

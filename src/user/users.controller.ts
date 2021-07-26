@@ -13,29 +13,11 @@ import { UserService } from './users.service';
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
-  @Post()
-  async addUser(
-    @Body('name') name: string,
-    @Body('surname') surname: string,
-    @Body('email') email: string,
-    @Body('password') password: string,
-  ) {
-    const generatedId = await this.userService.insertUser({
-      name,
-      surname,
-      email,
-      password,
-    });
-    return { id: generatedId };
-  }
-
-  /*
-
   @Get()
   async getAllUsers() {
-    //const products = await this.userService.getUser();
-    //return products;
+    return await this.userService.getAll();
   }
+  /*
 
   @Get(':id')
   getProduct(@Param('id') prodId: string) {

@@ -1,41 +1,36 @@
-import { Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { CreateUserDto } from './dto/create-user.dto';
+import { toUserDto, UserDto } from './dto/user.dto';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { User } from './user.schema';
-import * as bcrypt from 'bcrypt';
-import { CreateUserDto } from './dto/create-user.dto';
+import { FullUserDto } from './dto/full-user.dto';
 
 @Injectable()
 export class UserService {
-  constructor(@InjectModel('User') private readonly userModel: Model<User>) {}
+  constructor(@InjectModel('User') private userModel: Model<FullUserDto>) {}
 
-  async findOne(email: string): Promise<User | undefined> {
-    let user: User;
-    try {
-      user = await this.userModel
-        .findOne((u: User) => u.email === email)
-        .exec();
-    } catch (error) {
-      return user;
+  async findOne(options?: Record<string, unknown>): Promise<UserDto> {
+    const user = await this.userModel.findOne(options);
+    return toUserDto(user);
+  }
+
+  findOneLogin(email: string) {
+    return this.userModel.findOne({ email });
+  }
+
+  async insertUser(data: CreateUserDto): Promise<UserDto> {
+    // check if the user exists in the db
+    const userInDb = await this.userModel.findOne({ email: data.email });
+    if (userInDb) {
+      throw new HttpException('User already exists', HttpStatus.BAD_REQUEST);
     }
-    return user;
+
+    const createdUser = new this.userModel(data);
+    return await createdUser.save();
   }
 
-  async insertUser(data: CreateUserDto): Promise<string> {
-    const salt = bcrypt.genSaltSync(10);
-    data.password = bcrypt.hashSync(data.password, salt);
-
-    const newUser = new this.userModel(data);
-    const result = await newUser.save();
-    return result.id;
-  }
-
-  async checkPassword(passwordToCheck, password): Promise<boolean> {
-    return new Promise((resolve, reject) => {
-      bcrypt.compare(passwordToCheck, password, (err, isMatch) => {
-        if (err) reject(err);
-        resolve(isMatch);
-      });
-    });
+  async getAll(): Promise<UserDto[]> {
+    const users = await this.userModel.find();
+    return users.map((u) => toUserDto(u));
   }
 }
